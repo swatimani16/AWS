@@ -1,0 +1,8 @@
+Flask==1.0.2
+pandas
+matplotlib
+scikit-learn
+scipy
+redis
+numpy
+pymysql
