@@ -3,6 +3,3 @@ pandas
 matplotlib
 scikit-learn
 scipy
-redis
-numpy
-pymysql

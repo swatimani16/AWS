@@ -2,46 +2,51 @@ from flask import Flask, render_template, request
 import sqlite3 as sql
 import time
 import pandas as pd
+from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
-import redis
-import pickle
+import math
+from math import sqrt
 import numpy as np
-import random
-import pymysql
+from collections import Counter, defaultdict
+import scipy
+from sklearn import preprocessing
 
 application = Flask(__name__)
 
-currentYear = 2010
-currentYearloc = 2
-#r = redis.StrictRedis(host="swatiredis.redis.cache.windows.net", port=6380,password="4G67nLQxPEzXJBu0Gh1wcNgZcBbvAnLw4YqAGdb2aEQ=",ssl=True)
-
-
-
 @application.route('/')
-def index():
-    return render_template('index.html')
+def home():
+	return render_template('index.html')
 
-#Enter a csv file
-@application.route('/upload')
-def upload_csv():
-    return render_template('upload.html')
+@application.route('/newww')
+def newww():
+	return render_template('newww.html')
 
-@application.route('/try1')
-def try1():
-    return render_template('try1.html')
-
-
-@application.route('/forenter')
+@application.route('/formenter')
 def formenter():
-    return render_template('formenter.html')
+	return render_template('formenter.html')
 
-@application.route('/enter')
-def enter():
-    return render_template('enter.html')
 
-@application.route('/try2')
-def try2():
-    return render_template('try2.html')
+@application.route('/clustering')
+def clustering():
+	return render_template('clustering.html')
+
+
+@application.route('/nested_clus')
+def nested_clus():
+	return render_template('nested_clus.html')
+
+@application.route('/clus_centroid')
+def clus_centroid():
+	return render_template('clus_centroid.html')
+
+@application.route('/clustering1')
+def clustering1():
+	return render_template('clustering1.html')
+
+@application.route('/upload')
+def upload():
+	return render_template('upload.html')
+
 
 #Upload the csv file
 @application.route('/addrec',methods = ['POST', 'GET'])
@@ -56,271 +61,340 @@ def addrec():
        e_time=time.time()-s_time
        return render_template("result.html",msg = "Record inserted successfully", time=e_time)
 
-@application.route('/formfill',methods=['GET','POST'])
-def formfill():
-    query="SELECT * FROM swatidb.titanic3;"
-    cur = conn.cursor()
-    cur.execute(query)
-    rows = cur.fetchall()
-    return render_template('display.html',rows=rows)
-
-
-'''@application.route('/list',methods=['GET','POST'])
-def list():
-    cache = "mycache"
-    e_t=0
-    start_t = time.time()
-    query = "select * from Earthquake"
-    if r.get(cache):
-        t = "With Cache"
-        print(t)
-        isCache = 'with Cache'
-        s_t=time.time()
-        rows = pickle.loads(r.get(cache))
-        #r.delete(cache)
-        e_t=time.time()-s_t
-    else:
-        t = "Without Cache"
-        print(t)
+@application.route("/select_pop",methods=['GET','POST'])
+def select_pop():
+    if request.method=='POST':
+        v1=(request.form['d1'])
+        v2=(request.form['d2'])
+        v3=request.form['d3']
+        query = 'Select StateName,TotalPop from Earthquake where TotalPop between '+str(v1)+' and '+str(v2)+' '
+        print(query)
         con = sql.connect("database.db")
         cur = con.cursor()
         cur.execute(query)
         rows = cur.fetchall()
-        con.close()
-        r.set(cache, pickle.dumps(rows))
-    end_t = time.time() - start_t
-    print(end_t)
-    return render_template("display.html",data=rows, rows=e_t, stime=end_t)
+        print(rows)
+
+        query1 = 'Select StateName,TotalPop from Earthquake where TotalPop between '+str(v2)+' and '+str(v3)+' '
+        print(query1)
+        con = sql.connect("database.db")
+        cur = con.cursor()
+        cur.execute(query1)
+        rows1 = cur.fetchall()
+        print(rows1)
+        return render_template("table_display.html",data=rows,data1=rows1)
 
 
-@application.route("/between",methods=['GET','POST'])
-def between():
+def convert_fig_to_html(fig):
+	from io import BytesIO
+	figfile = BytesIO()
+	plt.savefig(figfile, format='png')
+	figfile.seek(0)  # rewind to beginning of file
+	import base64
+	#figdata_png = base64.b64encode(figfile.read())
+	figdata_png = base64.b64encode(figfile.getvalue())
+	return figdata_png
+
+
+#Cluster making Plotting
+@application.route('/cluster_plot',methods=['GET','POST'])
+def cluster_plot():
     if request.method=='POST':
-        mag1=float(request.form['mag1'])
-        mag2=float(request.form['mag2'])
-        intv=float(request.form['intv'])
-        count=int(request.form['count'])
-        start_t = time.time()
-        for i in range(count):
-            cache = "mycache"
-            for i in np.arange(mag1,mag2,intv):
-                query = "select * from Earthquake where mag between "+str(i)+" and "+str(i+intv)+""
-                print(query)
-                con = sql.connect("database.db")
-                cur = con.cursor()
-                cur.execute(query)
-                end_t = time.time() - start_t
-                rows = cur.fetchall()
-                con.close()
-                if r.get(cache):
-                    t = "With Cache"
-                    print(t)
-                    isCache = 'with Cache'
-                    s_t=time.time()
-                    rows = pickle.loads(r.get(cache))
-                    #r.delete(cache)
-                    e_t = time.time() - s_t
-                else:
-                    t = "Without Cache"
-                    print(t)
-                    con = sql.connect("database.db")
-                    cur = con.cursor()
-                    cur.execute(query)
-                    end_t = time.time() - start_t
-                    rows = cur.fetchall()
-                    con.close()
-                    r.set(cache, pickle.dumps(rows))
-                end_t = time.time() - start_t
-
-                print(end_t)
-        return render_template("display.html",data=rows, stime=end_t)
-
-@application.route('/randomImg',methods=['GET','POST'])
-def randomImg():
-    import os
-    path = "./static"
-    random_filename = random.choice([
-    x for x in os.listdir(path)
-    if os.path.isfile(os.path.join(path, x))])
-    print(random_filename)'''
-
-@application.route('/pop',methods=['GET','POST'])
-def pop():
-    starttime = time.time()
-    endtime2 = time.time()
-    global currentYear
-    global currentYearloc
-    print('currentYear', currentYear)
-    print('currentYearloc', currentYearloc)
-    finalRes = []
-    query = "SELECT * FROM Earthquake WHERE state in ('Texas', 'Louisiana', 'Oklahoma')"
-    con = sql.connect("database.db")
-    cur = con.cursor()
-    cur.execute(query)
-    rows = cur.fetchall()
-    print(rows)
-    print('1...', rows)
-    exectime2 = endtime2 - starttime
-    for r in rows:
-        finalRes.append([r[1], r[currentYearloc]])
-        # finalRes.append(r)
-    currentYear += 1
-    currentYearloc += 1
-    if currentYear == 2018 or currentYear > 2018:
-        currentYear = 2010
-        currentYearloc = 2
-    # print(currentYear, currentYearloc)
-    endtime = time.time()
-    exectime = endtime - starttime
-    return render_template('display.html',data=finalRes, timetaken=str(exectime),
-                           timetaken1=str(exectime2))
-
-##############################################################################################
-@application.route('/hojaaye', methods=['GET', 'POST'])
-def hojaaye():
-    if request.method=='POST':
-        id=request.form['id']
-        cn=request.form['cn']
-        s=request.form['s']
-        query="select * from Fall2019,students where Fall2019.Course="+str(cn)+" and Fall2019.Section="+str(s)+" and students.IdNum="+str(id)+""
-        connection = pymysql.connect('swatidb.c5acutexqw8h.us-east-2.rds.amazonaws.com', 'swatimani16', 'Chitra1970',
-                                     'swatidb')
-        cur = connection.cursor()
+        clus=int(request.form['c'])
+        clus1 = int(request.form['c1'])
+        stime1=time.time()
+        query = "SELECT wealth,Height FROM Earthquake"
+        con = sql.connect("database.db")
+        cur = con.cursor()
         cur.execute(query)
-        count=cur.fetchall()
-        #count=list(count)
-        #print(count[1])
-        print(list(count[0]))
-        h=count[0]
-        if h[6]!=0:
-        #print(h[0],type(h[0]))
-            change=h[6]-1
-            query1 = "update Fall2019 set Max= " + str(change) + " where Fall2019.Max= " + str(
-                h[6]) + " and Fall2019.Section=" + str(s) + ""
-            cur.execute(query1)
-            connection.commit()
-            cur.execute(query1)
-            rows = cur.fetchall()
-            strg="Seats are remaining"
-        # import requests
-        # resp = requests.get("http://127.0.0.1:5000/try1")
+        rows = cur.fetchall()
+        #print(rows)
+        y = pd.DataFrame(rows)
+        #print(y)
+        X = y.dropna()
+        #print(X)
+        k = KMeans(n_clusters=clus, random_state=0).fit(X)
+        fig1 = plt.figure()
+        centers = k.cluster_centers_
+        #Finding number of points in each cluster
+        print(Counter(k.labels_))
+        #
+        clusters_indices = defaultdict(list)
+        for index, c in enumerate(k.labels_):
+            clusters_indices[c].append(index)
+        print(clusters_indices)
+        d=[]
+        t1=[]
+        result=[]
+        result1=[]
+        for i in range(len(centers)):
+            for j in range(len(centers)):
+                dist = np.linalg.norm(centers[i]-centers[j])
+                t=str(centers[i])+"->"+str(centers[j])
+                #t1.append(t)
+                dict={}
+                dict["value"]=t
+                dict["dist"]=dist
+                #d.append(dist)
+                #t1.append(dist)
+                result.append(dict)
+        #print(t1[0],t1[1])
+        #print(centers[0][0])
+        l=k.labels_
 
-        # print(resp)
-        # webbrowser.open('http://127.0.0.1:5000/hojaaye')
+        plt.scatter(X[0], X[1],c=l)
+        plt.scatter(centers[:, 0], centers[:, 1], c='red', s=200,marker='*', alpha=0.5)
+        plot1 = convert_fig_to_html(fig1)
+        etime1=time.time()-stime1
+        stime2=time.time()
+        query1 = "SELECT Fare,Age FROM Earthquake"
+        con = sql.connect("database.db")
+        cur = con.cursor()
+        cur.execute(query1)
+        rows1 = cur.fetchall()
+        #print(rows)
+        y = pd.DataFrame(rows1)
+        #print(y)
+        X1 = y.dropna()
+        #print(X)
+        k1 = KMeans(n_clusters=clus1, random_state=0).fit(X1)
+        fig2 = plt.figure()
+        centers1 = k1.cluster_centers_
+        #Finding number of points in each cluster
+        print(Counter(k1.labels_))
+        #
+        clusters_indices1 = defaultdict(list)
+        for index, c in enumerate(k.labels_):
+            clusters_indices1[c].append(index)
+        print(clusters_indices1)
+        d=[]
+        t1=[]
+        result1=[]
+        for i in range(len(centers1)):
+            for j in range(len(centers1)):
+                dist = np.linalg.norm(centers1[i]-centers1[j])
+                t=str(centers1[i])+"->"+str(centers1[j])
+                #t1.append(t)
+                dict1={}
+                dict1["value"]=t
+                dict1["dist"]=dist
+                #d.append(dist)
+                #t1.append(dist)
+                result1.append(dict1)
+        #print(t1[0],t1[1])
+        #print(centers[0][0])
+        l=k.labels_
 
-        else:
-            strg=("No Seats Left!")
-        #print(change)
-        return render_template('justshow.html',ll=count,strg=strg)
-##############################################################################################
-@application.route('/trial',methods=['GET','POST'])
-def trial():
-    l=[]
+        plt.scatter(X1[0], X1[1],c=l)
+        plt.scatter(centers1[:, 0], centers1[:, 1], c='red', s=200,marker='*', alpha=0.5)
+        plot2 = convert_fig_to_html(fig2)
+        etime2=time.time()-stime2
+        return render_template("clus_o.html", data1=plot1.decode('utf8'),data2=plot2.decode('utf8'),distances=centers,distances1=centers1,count=Counter(k.labels_),count1=Counter(k1.labels_),time1=etime1,time2=etime2)
+
+@application.route('/cluster_elbow',methods=['GET','POST'])
+def cluster_elbow():
     if request.method=='POST':
-        id=request.form['id']
-        cn=request.form['cn']
-        s=request.form['s']
-        l.append(id)
-        l.append(cn)
-        l.append(s)
-        query = "SELECT IdNum From students"
-        connection = pymysql.connect('swatidb.c5acutexqw8h.us-east-2.rds.amazonaws.com', 'swatimani16', 'Chitra1970',
-                                     'swatidb')
-        cur = connection.cursor()
+        clus1 = int(request.form['c1'])
+        col1 = request.form['col1']
+        col2 = request.form['col2']
+        r1 = request.form['r1']
+        r2 = request.form['r2']
+        r3 = request.form['r3']
+        r4 = request.form['r4']
+        query = "SELECT " + col1 + "," + col2 + " FROM Earthquake"
+        print(query)
+        con = sql.connect("database.db")
+        cur = con.cursor()
         cur.execute(query)
-        count = cur.fetchall()
-        c = 0
-        for r in range(len(count)):
-            if count[r][0] != id:
-                c = 1
-        if c==1:
-            query1 = "Insert into students(IdNum,Credit) VALUES (" + str(id) + ",'20')"
-            cur = connection.cursor()
-            cur.execute(query1)
-            connection.commit()
-            print(c)
-        else:
-            c = 0
-        query2="Select Credit from students where IdNum="+str(id)+""
-        cur = connection.cursor()
-        cur.execute(query2)
-        connection.commit()
-        count1 = cur.fetchall()
-        if count1[0][0]>20:
-            temp=count1[0][0]
-            temp1=temp-20
-            print(temp1)
-            query3="UPDATE students SET Credit = " +str(temp1) + " WHERE IdNum = " + id
-            cur = connection.cursor()
-            cur.execute(query3)
-            connection.commit()
-        query3="Select Age from students where IdNum="+str(id)+""
-        cur = connection.cursor()
-        cur.execute(query3)
-        count2 = cur.fetchall()
-        connection.commit()
-        print(count2)
-        if count2[0][0]>=60:
-            temp2=count1[0][0]
-            t=temp2-10
-            query5 = "UPDATE students SET Credit = " + str(t) + " WHERE IdNum = " + id
-            cur = connection.cursor()
-            cur.execute(query5)
-            connection.commit()
-        query6="Insert into Enrollment (IdNum,Course,Section) VALUES (" + str(id) +","+ str(cn)+ ","+str(s)+")"
-        cur = connection.cursor()
-        cur.execute(query6)
-        connection.commit()
-        query9="select * from Enrollment where IdNum="+str(id)+""
-        cur = connection.cursor()
-        cur.execute(query9)
-        connection.commit()
-        rows4=cur.fetchall()
-        return render_template('justshow.html',l2=l,l1=rows4)
-####################################################################################
-@application.route('/alter',methods=['GET','POST'])
-def alter():
+        rows = cur.fetchall()
+        y = pd.DataFrame(rows)
+        # print(y)
+        X = y.dropna()
+
+        # print(X)
+        k = KMeans(n_clusters=clus1, random_state=0).fit(X)
+
+        fig1 = plt.figure()
+        centers = k.cluster_centers_
+        # Finding number of points in each cluster
+        print(Counter(k.labels_))
+        #
+        clusters_indices = defaultdict(list)
+        for index, c in enumerate(k.labels_):
+            clusters_indices[c].append(index)
+        print(clusters_indices)
+        d = []
+        t1 = []
+        result = []
+        for i in range(len(centers)):
+            for j in range(len(centers)):
+                dist = np.linalg.norm(centers[i] - centers[j])
+                t = str(centers[i]) + "->" + str(centers[j])
+                # t1.append(t)
+                dict = {}
+                dict["value"] = t
+                dict["dist"] = dist
+                # d.append(dist)
+                # t1.append(dist)
+                result.append(dict)
+        le=preprocessing.LabelEncoder()
+        le.fit(X.iloc[:,1])
+        X.iloc[:,1]=le.transform(X.iloc[:,1])
+        return render_template("clus_o.html",distances=centers,count=Counter(k.labels_))
+
+
+@application.route('/nested',methods=['GET','POST'])
+def nested():
     if request.method=='POST':
-        id=request.form['id']
-        cn=request.form['cn']
-        s=request.form['s']
-        connection = pymysql.connect('swatidb.c5acutexqw8h.us-east-2.rds.amazonaws.com', 'swatimani16', 'Chitra1970',
-                                     'swatidb')
-        query3 = "ALTER TABLE students ADD COLUMN Course VARCHAR(15)"
-        print(query3)
-        cur = connection.cursor()
-        cur.execute(query3)
-        count4 = cur.fetchall()
-        connection.commit()
-        return render_template('justshow.html', ll="sucess")
+        clus=int(request.form['clus'])
+        query = "Select smokingprevalence.prevalence,pricecigarettes.indicator from smokingprevalence,pricecigarettes where pricecigarettes.entity=smokingprevalence.entity and smokingprevalence.year=pricecigarettes.year"
+        con = sql.connect("database.db")
+        cur = con.cursor()
+        cur.execute(query)
+        rows = cur.fetchall()
+        #print(rows)
+        y = pd.DataFrame(rows)
+        #print(y)
+        X = y.dropna()
+        #print(X)
+        le = preprocessing.LabelEncoder()
+        le.fit(X.iloc[:, 1])
+        X.iloc[:, 1] = le.transform(X.iloc[:, 1])
+        # print(X)
+        k = KMeans(n_clusters=clus, random_state=0).fit(X.iloc[:, 0:2])
+        fig = plt.figure()
+        centers = k.cluster_centers_
+        print(Counter(k.labels_))
+        #
+        clusters_indices = defaultdict(list)
+        for index, c in enumerate(k.labels_):
+            clusters_indices[c].append(index)
+        print(clusters_indices)
+        d=[]
+        t1=[]
+        for i in range(len(centers)):
+            for j in range(len(centers)):
+                dist = np.linalg.norm(centers[i]-centers[j])
+                t=str(centers[i])+"->"+str(centers[j])
+                t1.append(t)
+                d.append(dist)
+                t1.append(dist)
+        #print(t1[0],t1[1])
+        #print(centers[0][0])
+        l=k.labels_
+        plt.scatter(X[0], X[1],c=l)
+        plt.scatter(centers[:, 0], centers[:, 1], c='red', s=200,marker='*', alpha=0.5)
+        plot = convert_fig_to_html(fig)
+        return render_template("clus_o.html", data=plot.decode('utf8'),distances=centers,count=Counter(k.labels_))
 
-@application.route('/trynew',methods=['GET','POST'])
-def trial1():
-   if request.form=='POST':
-       id = request.form['id']
-       cn = request.form['cn']
-       s = request.form['s']
 
-       query="SELECT * FROM swatidb.students"
-       connection = pymysql.connect('swatidb.c5acutexqw8h.us-east-2.rds.amazonaws.com', 'swatimani16', 'Chitra1970',
-                                    'swatidb')
-       cur = connection.cursor()
-       cur.execute(query)
-       rows = cur.fetchall()
-       print(rows)
-       count=0
-       for r in range(len(rows)):
-           if rows[r]!=id:
-               count+=1
-               print(count)
-           else:
-               count=0
-       if count==1:
-           query1="Insert into students (IdNum,Credit) VALUES ("+id+","+20+")"
-           cur = connection.cursor()
-           cur.execute(query1)
-           #print(rows)
-   #return render_template('justshow.txt',ll=rows)
+
+
+
+@application.route('/cluster_centroid',methods=['GET','POST'])
+def cluster_centroid():
+    centroid=[]
+    if request.method=='POST':
+        clus = int(request.form['c'])
+        centroid1 = float(request.form['c2'])
+        centroid2 = float(request.form['cen2'])
+        centroid.append(centroid1)
+        centroid.append(centroid2)
+        query = "SELECT fare,wealth,Age,Lname FROM Earthquake"
+        con = sql.connect("database.db")
+        cur = con.cursor()
+        cur.execute(query)
+        rows = cur.fetchall()
+        # print(rows)
+        y = pd.DataFrame(rows)
+        # print(y)
+        X = y.dropna()
+        #print(X.head)
+        le = preprocessing.LabelEncoder()
+        le.fit(X.iloc[:, 1])
+        X.iloc[:, 1] = le.transform(X.iloc[:, 1])
+        # print(X)
+        k = KMeans(n_clusters=clus, random_state=0).fit(X.iloc[:,0:2])
+        fig = plt.figure()
+        centers = k.cluster_centers_
+        #print('hi',centers)
+        # Finding number of points in each cluster
+        #print(Counter(k.labels_))
+        l=k.labels_
+        #print(l)
+        clusters_indices = defaultdict(list)
+        for index, c in enumerate(k.labels_):
+            clusters_indices[c].append(index)
+        #print(clusters_indices)
+        d = []
+        t1 = []
+        for i in range(len(centers)):
+            for j in range(len(centers)):
+                dist = np.linalg.norm(centers[i] - centers[j])
+                t = str(centers[i]) + "->" + str(centers[j])
+                t1.append(t)
+                d.append(dist)
+                t1.append(dist)
+        # print(t1[0],t1[1])
+        # print(centers[0][0])
+        l = k.labels_
+        centers.tolist()
+        #print(centers)
+        cen=centroid[0]
+        j=centroid.index(cen)
+        b=[list(x) for x in rows]
+        res=[]
+        for i in range(len(l)):
+            t = []
+            if (l[i] == j):
+                t.append(b[i])
+
+                res.append(t)
+        print(res)
+        plt.scatter(X[0], X[1], c=l)
+        plt.scatter(centers[:, 0], centers[:, 1], c='blue', s=200, marker='*', alpha=0.5)
+        plot = convert_fig_to_html(fig)
+        return render_template("clus_o1.html", data=plot.decode('utf8'), distances=t1,rows=res)
+
+@application.route('/plot_pie',methods=['GET','POST'])
+def plot_pie():
+    mlist=[]
+
+    if request.method=='POST':
+        col1 = str(request.form['col1'])
+        col2 = str(request.form['col2'])
+        r1 = int(request.form['r1'])
+        r2 = int(request.form['r2'])
+        r3 = request.form['r3']
+        r4 = request.form['r4']
+        l1 = []
+        l = []
+
+        interval = int(request.form['intv'])
+        for i in range(r1, r2, interval):
+            l1 = []
+            l = []
+            query = "SELECT "+col1+" FROM Earthquake"
+            print(query)
+            con = sql.connect("database.db")
+            cur = con.cursor()
+            cur.execute(query)
+            rows = cur.fetchone()
+            l = str(i) + "--" + str(i + interval)
+            l1.append(l)
+            print(l1)
+            l1.append(rows)
+            print(l1)
+            mlist.append(l1)
+            y = pd.DataFrame(mlist)
+            X=y.dropna()
+            print(X[1])
+            fig = plt.figure()
+            plt.pie(X[1], autopct='%1.1f%%', labels=X[0])
+            plt.legend()
+            plot = convert_fig_to_html(fig)
+        return render_template("clus_o.html", data=plot.decode('utf8'))
+
 if __name__ == '__main__':
-    application.run()
+   application.run()
 

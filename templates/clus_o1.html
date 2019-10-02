@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+
+   <body>
+
+   <table>
+      <h1 style="color:blue">Swati Sriram Mani, 8136 </h1>
+      <br> <br>
+      <div>
+         <img src="data:image/png;base64,{{ data }}" align="right" height="40%" width="75%"\>
+      </div>
+
+
+   </table>
+   <table>
+       {% for r in rows%}
+       <tr><td>{{r}}</td></tr>
+       {% endfor%}
+   </table>
+   </body>
+</html>
